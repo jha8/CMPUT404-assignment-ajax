@@ -6,7 +6,7 @@
     <meta content='width=device-width; height=device-height; initial-scale=1.0; maximum-scale=1.0; user-scalable=0;' name='viewport' />
     <meta name="viewport" content="width=device-width" />
     <meta name="license" content="
-        Copyright 2013 Abram Hindle
+        Copyright 2021 Abram Hindle and Joe Ha
         
         Licensed under the Apache License, Version 2.0 (the "License");
         you may not use this file except in compliance with the License.
@@ -32,15 +32,18 @@ var W = canvas.width  = window.innerWidth-6;
 var H = canvas.height = window.innerHeight-50;
 
 
-function sendJSONXMLHTTPRequest(url, objects, callback) {
+//Referenced: https://xhr.spec.whatwg.org/#the-setrequestheader()-method
+// https://www.w3schools.com/xml/xml_http.asp
+// For XMLHttpRequest
+function sendJSONXMLHTTPRequest(url, objects, callback, method) {
     var xhr = new XMLHttpRequest();
     xhr.onreadystatechange = function () {
-        if (xhr.readyState==4) {
+        if (xhr.readyState == 4 && xhr.status == 200 && callback !== null) {
             try {
-                if (xhr.status==200) {
-                    //XXX: parse some JSON from the request!
-                    //XXX: Pass the data to the callback!
-                }
+                //XXX: parse some JSON from the request!
+                let request_json = JSON.parse(xhr.responseText);
+                //XXX: Pass the data to the callback!
+                callback(request_json);
             } 
             catch(e) {
                 alert('Error: ' + e.name);
@@ -48,8 +51,12 @@ function sendJSONXMLHTTPRequest(url, objects, callback) {
         }
     };
     //XXX: POST to a URL
+    xhr.open(method, url);
     //XXX: set the mimetype and the accept headers!
+    xhr.setRequestHeader("Accept", "application/json")
     // Remember to use application/json !
+    xhr.setRequestHeader("Content-Type", "application/json")
+    xhr.send(JSON.stringify(objects))
 }
 
 
@@ -64,18 +71,31 @@ function drawCircle(context,entity) {
         var y = entity["y"];
         //moveTo(x,y);
         fillStyle = entity["colour"];
-        strokeStyle = fillStyle;
-        arc(x, y, (entity["radius"])?entity["radius"]:50, 0, 2.0 * Math.PI, false);  
+        //Added different stroke color and filled each circle.
+        strokeStyle = "#fff3e6";
+        arc(x, y, (entity["radius"])?entity["radius"]:25, 0, 2.0 * Math.PI, false);  
+        fill();
         stroke();                                
     }
 }
 
+// Alternates pen color, as mouse is being dragged.
+var currentColor = "#16c79a";
+function alternateColor(){
+    if (currentColor === "#16c79a") {
+        currentColor = "#295939";
+    } else {
+        currentColor = "#16c79a";
+    }
+    return currentColor;
+}
+
 function prepEntity(entity) {
     if (!entity["colour"]) {
-        entity["colour"] = "#FF0000";
+        entity["colour"] = "#19456b";
     }
     if (!entity["radius"]) {
-        entity["radius"] = 50;
+        entity["radius"] = 25;
     }
     return entity;
 }
@@ -138,7 +158,7 @@ function addEntity(entity, data) {
     world[entity] = data;
     drawNextFrame(); // (but should we?)
     //XXX: Send a XHTML Request that updates the entity you just  modified!
-
+    sendJSONXMLHTTPRequest('/entity/'+entity, data, function(response){}, "PUT");
 }
 
 var counter = 0;
@@ -147,6 +167,24 @@ function addEntityWithoutName(data) {
     var name = "X"+(counter++)%100;
     addEntity(name,data);
 }
+
+function updateWorldWith(response) {
+    for (var key in response) {
+        world[key]  = response[key];
+    }
+    drawNextFrame();
+}
+
+function getWorld() {
+    sendJSONXMLHTTPRequest('/world', null, function(response) {
+        if (response) {
+            updateWorldWith(response);
+        }
+    }, "GET");
+}
+
+// static/index.html responds to clicks within (< 100ms) on average
+setInterval( getWorld, 99);
 
 // canvas + mouse/touch is complicated 
 // I give you this because well the mouse/touch stuff is a total
@@ -247,18 +285,17 @@ mouse = (function() {
 // Add the application specific mouse listeners!
 //XXX: TODO Make these prettier!
 mouse.mousedowners.push(function(x,y,clicked,e) {
-    addEntityWithoutName({'x':x,'y':y,'colour':'blue'});
+    addEntityWithoutName({'x':x,'y':y,'colour':'#19456b', 'radius':25});
 });
 
 mouse.mouseuppers.push(function(x,y,clicked,e) {
-    addEntityWithoutName({'x':x,'y':y,'colour':'red'});
+    addEntityWithoutName({'x':x,'y':y,'colour':'#f58634', 'radius':25});
 });
 
 mouse.mousedraggers.push(function(x,y,clicked,e) {
-    addEntityWithoutName({'x':x,'y':y,'colour':'green',
+    addEntityWithoutName({'x':x,'y':y,'colour': alternateColor(),
                           'radius':10});
 });
-
 
 function update() {
     //XXX: TODO Get the world from the webservice using a XMLHTTPRequest
@@ -273,3 +310,4 @@ setInterval( update, 1000/30.0);
     </script>
 </body>
 </html>
+
